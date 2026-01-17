@@ -1,6 +1,6 @@
 # TheODOR Advanced
 
-TheODOR misst nicht nur Luftfeuchtigkeit, Temperatur und Druck, sondern auch einen eCO2 Wert (Luftqualität) und Feinstaubwerte.
+TheODOR misst Luftfeuchtigkeit, Temperatur, Druck, Luftqualität (eCO2 Werte) und Feinstaubwerte und veröffentlich dann die Werte über eine MQTT-Verbindung auf der [OpenSenseMap](https://opensensemap.org/).
 
 ## Hardware
 
@@ -22,6 +22,8 @@ TheODOR misst nicht nur Luftfeuchtigkeit, Temperatur und Druck, sondern auch ein
 | TX      | GPIO18    | UART-TX                        | Senden ! 3.3V       |
 
 <img src="docs/pms3033_pinout.jpg" width="300">
+
+Der Feinstaub-Sensor arbeitet optisch mit einem Laser und einem kleinen Lüfter. Achte darauf, dass die Ansaugöffnung der Wetterstation vor Insekten geschützt ist (z.B. durch ein feines Netz), aber dennoch frei atmen kann.
 
 | CSS811 | ESP32 Pin | Funktion        | Beschreibung                                      |
 | :----- | :-------- | :-------------- | :------------------------------------------------ |
@@ -46,8 +48,26 @@ Alle Masse Pins (GND) müssen miteinander verbunden sein!
 
 ## Bibliotheken
 
+- PubSubClient.h
+- ArduinoJson.h
 - Wire.h
 - Adafruit_CCS811.h
 - HardwareSerial.h
-- PubSubClient.h
-- ArduinoJson.h
+- Adafruit BusIO
+
+**Wichtiger Hinweis zur Installation:** Bei der Installation der Adafruit_CCS811 Bibliothek in der Arduino IDE muss zwingend auch die Adafruit BusIO Bibliothek installiert werden. Wähle bei der Abfrage am besten "Install all dependencies" aus.
+
+## Konfigurations-Schritte
+
+Bevor der Code auf den ESP32 geladen wird, müssen folgende Variablen im Sketch angepasst werden:
+
+1. **WLAN-Daten:** ssid und password deines lokalen Netzwerks.
+2. **Station-Name:** Vergib einen eindeutigen Namen für station_name (z.B. station_ort_01). Dieser Name muss einmalig sein!
+3. **Sensor-IDs:** Erstelle eine neue Station auf [openSenseMap.org](https://opensensemap.org/) und kopiere die IDs für Temperatur, Feinstaub etc. in die entsprechenden ID\_-Variablen im Code.
+4. **MQTT-Topic:** Achte darauf, dass im mqtt_topic keine Leerzeichen und Umlaute enthalten sind. Das Topic im Code muss exakt mit dem in der OpenSenseMap hinterlegten Topic übereinstimmen.
+   Formuliere es am besten in diesem Format: "BEZIRK/ORT/STATION1/DATA" (z.B. "schaerding/zellPram/station1/data).
+
+## Troubleshooting
+
+- **Keine Daten in OSEM?** Prüfe im Seriellen Monitor, ob "Erfolgreich gesendet" erscheint. Wenn ja, kontrolliere, ob der Flespi-Token und das Topic in OSEM korrekt hinterlegt sind.
+- **Kompilierfehler?** Sicherstellen, dass alle Bibliotheken (insbes. Adafruit BusIO) aktuell sind.
