@@ -47,3 +47,5 @@ Der CSS811 muss beim Erstbetrieb 48 Stunden lang im Dauerbetrieb laufen, damit s
 - Wire.h
 - Adafruit_CCS811.h
 - HardwareSerial.h
+- PubSubClient.h
+- ArduinoJson.h
