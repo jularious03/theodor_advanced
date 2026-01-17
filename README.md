@@ -42,6 +42,8 @@ Der CSS811 muss beim Erstbetrieb 48 Stunden lang im Dauerbetrieb laufen, damit s
 
 ![ESP Pinout](docs/ESP32-Pinout.png)
 
+Alle Masse Pins (GND) müssen miteinander verbunden sein!
+
 ## Bibliotheken
 
 - Wire.h
