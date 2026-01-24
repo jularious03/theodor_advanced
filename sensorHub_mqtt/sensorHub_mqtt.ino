@@ -7,6 +7,8 @@
 #include <Wire.h>
 #include "Adafruit_CCS811.h"
 #include <HardwareSerial.h>
+#include <Adafruit_BME280.h>
+
 
 // ==========================================
 // INDIVIDUELLE EINSTELLUNGEN FÜR DIE STATION
@@ -51,6 +53,7 @@ int current_co2 = 0;
 int current_pm1_0 = 0, current_pm2_5 = 0, current_pm10 = 0;
 
 Adafruit_CCS811 ccs;
+Adafruit_BME280 bme;
 HardwareSerial PMS(2);
 
 WiFiClient espClient;
@@ -128,45 +131,67 @@ void setup() {
   if(!ccs.begin(0x5A)){
     Serial.println("Fehler: CCS811 nicht gefunden.");
   }
+  if (!bme.begin(0x76)) { 
+    Serial.println("Fehler: BME280 nicht gefunden! Prüfe Adresse (0x76/0x77).");
+  }
 }
 
 void loop() {
-  if (!client.connected()) reconnect();
+  if (!client.connected()) {
+    reconnect();
+  }
   client.loop();
 
-  // Sensoren kontinuierlich im Hintergrund abfragen
-  updatePMS();
-  if(ccs.available() && !ccs.readData()) {
-    current_co2 = ccs.geteCO2();
-  }
-
-  // Sende-Intervall (30 Sek)
   unsigned long now = millis();
   if (now - lastMsg > 30000) {
     lastMsg = now;
 
-    JsonDocument doc; // Jetzt am Anfang deklariert
-    
-    // 1. Reale Sensorwerte einfügen
-    if (current_co2 > 0) doc[ID_CO2] = current_co2;
-    if (current_pm2_5 > 0) {
-      doc[ID_DUST1_0] = current_pm1_0;
-      doc[ID_DUST2_5] = current_pm2_5;
-      doc[ID_DUST10]  = current_pm10;
+    // 1. JSON Dokument deklarieren
+    JsonDocument doc; 
+
+    // 2. BME280 auslesen (Temperatur, Feuchte, Druck)
+    float temp = bme.readTemperature();
+    float hum = bme.readHumidity();
+    float pres = bme.readPressure() / 100.0F; // Umrechnung in hPa
+
+    doc[ID_TEMP]  = temp; 
+    doc[ID_HUM]   = hum; 
+    doc[ID_PRESS] = pres;
+
+    // 3. CO2 (CCS811) auslesen - Nutzt BME-Daten zur Kompensation
+    if(ccs.available()){
+      // Profi-Tipp: CCS811 wird genauer, wenn er Temp/Hum vom BME bekommt
+      ccs.setEnvironmentalData(hum, temp); 
+      if(!ccs.readData()){
+        doc[ID_CO2] = ccs.geteCO2();
+      }
     }
 
-    // 2. Dummy-Werte für BME280 (bis Hardware da ist)
-    doc[ID_TEMP] = 22.5; 
-    doc[ID_HUM] = 55.0; 
-    doc[ID_PRESS] = 1013.2;
+    // 4. Feinstaub (PMS3003) auslesen
+    if (PMS.available() >= 24) {
+      if (PMS.read() == 0x42 && PMS.peek() == 0x4D) {
+        PMS.read();
+        uint8_t pmsBuffer[22];
+        PMS.readBytes(pmsBuffer, 22);
+        
+        int pm1_0 = (pmsBuffer[2] << 8) | pmsBuffer[3];
+        int pm2_5 = (pmsBuffer[4] << 8) | pmsBuffer[5];
+        int pm10  = (pmsBuffer[6] << 8) | pmsBuffer[7];
 
-    char msgBuffer[512];
-    serializeJson(doc, msgBuffer);
+        doc[ID_DUST10]  = pm10;   
+        doc[ID_DUST2_5] = pm2_5;
+        doc[ID_DUST1_0] = pm1_0;
+      }
+    }
 
-    if (client.publish(mqtt_topic, msgBuffer, true)) {
-      Serial.print("Erfolgreich gesendet: "); Serial.println(msgBuffer);
+    // 5. Absenden
+    char sendBuffer[512];
+    serializeJson(doc, sendBuffer);
+
+    if (client.publish(mqtt_topic, sendBuffer, true)) {
+      Serial.print("Gesendet: "); Serial.println(sendBuffer);
     } else {
-      Serial.println("Fehler beim Senden!");
+      Serial.println("MQTT Sende-Fehler!");
     }
   }
 }

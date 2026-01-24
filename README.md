@@ -51,8 +51,9 @@ Alle Masse Pins (GND) müssen miteinander verbunden sein!
 - PubSubClient.h
 - ArduinoJson.h
 - Wire.h
-- Adafruit_CCS811.h
 - HardwareSerial.h
+- Adafruit_CCS811.h
+- Adafruit BME280
 - Adafruit BusIO
 
 **Wichtiger Hinweis zur Installation:** Bei der Installation der Adafruit_CCS811 Bibliothek in der Arduino IDE muss zwingend auch die Adafruit BusIO Bibliothek installiert werden. Wähle bei der Abfrage am besten "Install all dependencies" aus.
@@ -69,5 +70,5 @@ Bevor der Code auf den ESP32 geladen wird, müssen folgende Variablen im Sketch 
 
 ## Troubleshooting
 
-- **Keine Daten in OSEM?** Prüfe im Seriellen Monitor, ob "Erfolgreich gesendet" erscheint. Wenn ja, kontrolliere, ob der Flespi-Token und das Topic in OSEM korrekt hinterlegt sind.
+- **Keine Daten in der OSEM?** Prüfe im Seriellen Monitor, ob "Erfolgreich gesendet" erscheint. Wenn ja, kontrolliere, ob der Flespi-Token und das Topic in OSEM korrekt hinterlegt sind.
 - **Kompilierfehler?** Sicherstellen, dass alle Bibliotheken (insbes. Adafruit BusIO) aktuell sind.
