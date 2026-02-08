@@ -7,7 +7,7 @@
 **DS3231 Module = RTC-Modul (Real Time Clock):**
 
 - günstig und präzise
-- wird versorgt durch Knopfzelle (verbraucht wenig Strom ($1-3 /mu A$))
+- wird versorgt durch Knopfzelle (verbraucht wenig Strom (1-3 Mikroampere))
 - Power-LEDs und Ladeschaltungen entfernen, um Strom zu sparen
 
 ### Software-Trick (kostenlose Alternative)
