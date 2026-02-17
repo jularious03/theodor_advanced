@@ -72,3 +72,4 @@ Bevor der Code auf den ESP32 geladen wird, müssen folgende Variablen im Sketch 
 
 - **Keine Daten in der OSEM?** Prüfe im Seriellen Monitor, ob "Erfolgreich gesendet" erscheint. Wenn ja, kontrolliere, ob der Flespi-Token und das Topic in OSEM korrekt hinterlegt sind.
 - **Kompilierfehler?** Sicherstellen, dass alle Bibliotheken (insbes. Adafruit BusIO) aktuell sind.
+- **zu großer Payload?** Wenn die Daten zu groß sind und nicht verschickt werden können, dann setze die Buffersize größer (*client.setBufferSize(512);*)

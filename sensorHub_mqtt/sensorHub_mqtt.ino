@@ -6,16 +6,18 @@
 #include <HardwareSerial.h>
 #include <Adafruit_BME280.h>
 
+// #define MQTT_MAX_PACKET_SIZE 1024
+
 // ==========================================
 // INDIVIDUELLE EINSTELLUNGEN FÜR DIE STATION
 // ==========================================
-const char* ssid = "buero";//"WLAN_NAME_VOR_ORT";
-const char* password = "#IwidA25!"; //"WLAN_PASSWORT_VOR_ORT";
+const char* ssid = "WLAN_NAME_VOR_ORT";
+const char* password = "WLAN_PASSWORT_VOR_ORT";
 const char* station_name = "STATION_ORT_01";
 
 // Deep Sleep Einstellungen
 #define uS_TO_S_FACTOR 1000000ULL  
-#define TIME_TO_SLEEP  60         // 900 Sekunden = 15 Minuten Schlaf
+#define TIME_TO_SLEEP  900       // 900 Sekunden = 15 Minuten Schlaf
 
 // OpenSenseMap Sensor-IDs
 const char* ID_TEMP    = "695a810d2432d1000720e77e";
@@ -27,7 +29,7 @@ const char* ID_DUST2_5 = "696b843dcbf9bc0007f509c6";
 const char* ID_DUST1_0 = "696b843dcbf9bc0007f509c8";
 
 const char* mqtt_topic = "BEZIRK/ORT/STATION1/DATA";
-const char* mqtt_token = "FlespiToken DIfztwabw35GNGtQL4P5vwjZ4CdmtSOhq78QFvDbaGCUksaw1PNuxDqHxyYbzW1v";//"u5WYsylRd5wqJpAV9SUWtdvN2xHftaeVwST1g2eRrip5A4Bf5vVA3KDjMj3RiVox";
+const char* mqtt_token = "FlespiToken DIfztwabw35GNGtQL4P5vwjZ4CdmtSOhq78QFvDbaGCUksaw1PNuxDqHxyYbzW1v";
 const char* mqtt_server = "mqtt.flespi.io";
 const int mqtt_port = 1883;
 
@@ -96,6 +98,7 @@ void setup() {
   // 3. Netzwerk starten
   setup_wifi();
   client.setServer(mqtt_server, mqtt_port);
+  client.setBufferSize(512);
   if (!client.connected()) reconnect();
 
   // 4. Daten auslesen
@@ -141,21 +144,22 @@ void setup() {
   Serial.println(buffer);
 
   if (client.connected()) {
-      if (client.publish(mqtt_topic, buffer, true)) {
-          Serial.println("MQTT Publish erfolgreich angestoßen.");
-      } else {
-          Serial.println("MQTT Publish fehlgeschlagen.");
-      }
+    Serial.println(client.state());
+    if (client.publish(mqtt_topic, buffer, true)) {
+        Serial.println("MQTT Publish erfolgreich angestoßen.");
+    } else {
+        Serial.println("MQTT Publish fehlgeschlagen.");
+    }
 
-      // WICHTIG: Gib dem Netzwerk-Stack Zeit, die Daten wirklich zu senden
-      // Wir lassen die MQTT-Schleife 2 Sekunden laufen
-      unsigned long startMqttLoop = millis();
-      while (millis() - startMqttLoop < 2000) {
-          client.loop();
-          delay(10);
-      }
+    // WICHTIG: Gib dem Netzwerk-Stack Zeit, die Daten wirklich zu senden
+    // Wir lassen die MQTT-Schleife 2 Sekunden laufen
+    unsigned long startMqttLoop = millis();
+    while (millis() - startMqttLoop < 2000) {
+        client.loop();
+        delay(10);
+    }
 
-      client.disconnect(); // Verbindung sauber beenden
+    client.disconnect(); // Verbindung sauber beenden
   }
 
   WiFi.disconnect(true); // WiFi explizit abschalten
