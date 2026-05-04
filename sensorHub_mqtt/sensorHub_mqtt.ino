@@ -2,22 +2,25 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <Wire.h>
-#include "Adafruit_CCS811.h"
-#include <HardwareSerial.h>
+#include <Adafruit_CCS811.h>
 #include <Adafruit_BME280.h>
-
-// #define MQTT_MAX_PACKET_SIZE 1024
+#include <HardwareSerial.h>
 
 // ==========================================
-// INDIVIDUELLE EINSTELLUNGEN FÜR DIE STATION
+// INDIVIDUELLE EINSTELLUNGEN
 // ==========================================
-const char* ssid = "WLAN_NAME_VOR_ORT";
-const char* password = "WLAN_PASSWORT_VOR_ORT";
+
+const char* ssid = "DEIN_WLAN";
+const char* password = "DEIN_PASSWORT";
 const char* station_name = "STATION_ORT_01";
 
-// Deep Sleep Einstellungen
-#define uS_TO_S_FACTOR 1000000ULL  
-#define TIME_TO_SLEEP  900       // 900 Sekunden = 15 Minuten Schlaf
+#define TIME_TO_SLEEP 900   // 900 Sekunden = 15 Minuten
+
+const char* mqtt_topic = "BEZIRK/ORT/STATION1/DATA";
+
+const char* mqtt_token = "FlespiToken b2gBQzaqtV13ELiBVGDfICUSX9khA9vZsffXbhtUeJIgggNc1geyOUUuJxXBb7co";
+const char* mqtt_server = "mqtt.flespi.io";
+const int mqtt_port = 1883;
 
 // OpenSenseMap Sensor-IDs
 const char* ID_TEMP    = "695a810d2432d1000720e77e";
@@ -28,151 +31,355 @@ const char* ID_DUST10  = "695a810d2432d1000720e782";
 const char* ID_DUST2_5 = "696b843dcbf9bc0007f509c6";
 const char* ID_DUST1_0 = "696b843dcbf9bc0007f509c8";
 
-const char* mqtt_topic = "BEZIRK/ORT/STATION1/DATA";
-const char* mqtt_token = "FlespiToken DIfztwabw35GNGtQL4P5vwjZ4CdmtSOhq78QFvDbaGCUksaw1PNuxDqHxyYbzW1v";
-const char* mqtt_server = "mqtt.flespi.io";
-const int mqtt_port = 1883;
-
 // Pins
 #define I2C_SDA 21
 #define I2C_SCL 22
-#define PMS_RX 18 
-#define PMS_TX 19 
+#define PMS_RX 18
+#define PMS_TX 19
 #define SET_PIN 4
+
+#define uS_TO_S_FACTOR 1000000ULL
 
 Adafruit_CCS811 ccs;
 Adafruit_BME280 bme;
 HardwareSerial PMS(2);
+
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-void setup_wifi() {
-  Serial.print("Verbinde mit ");
+bool bmeOK = false;
+bool ccsOK = false;
+
+// ==========================================
+// WLAN
+// ==========================================
+
+bool setup_wifi() {
+  Serial.print("Verbinde mit WLAN: ");
   Serial.println(ssid);
+
   WiFi.begin(ssid, password);
-  int attempt = 0;
-  while (WiFi.status() != WL_CONNECTED && attempt < 20) {
+
+  unsigned long start = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < 15000) {
     delay(500);
     Serial.print(".");
-    attempt++;
   }
-  if(WiFi.status() == WL_CONNECTED) {
+
+  if (WiFi.status() == WL_CONNECTED) {
     Serial.println("\nWiFi verbunden.");
+    Serial.print("IP: ");
+    Serial.println(WiFi.localIP());
+    return true;
   }
+
+  Serial.println("\nWiFi Verbindung fehlgeschlagen.");
+  return false;
 }
 
-void reconnect() {
-  while (!client.connected()) {
-    Serial.print("Versuche MQTT Verbindung...");
+// ==========================================
+// MQTT
+// ==========================================
+
+bool reconnect_mqtt() {
+  Serial.println("Verbinde mit MQTT...");
+
+  unsigned long start = millis();
+
+  while (!client.connected() && millis() - start < 10000) {
     if (client.connect(station_name, mqtt_token, "")) {
-      Serial.println("verbunden!");
-    } else {
-      Serial.print("Fehlgeschlagen, rc=");
-      Serial.print(client.state());
-      delay(2000);
+      Serial.println("MQTT verbunden.");
+      return true;
     }
+
+    Serial.print("MQTT fehlgeschlagen, rc=");
+    Serial.println(client.state());
+    delay(1000);
   }
+
+  Serial.println("MQTT Timeout.");
+  return false;
 }
 
-void setup() {
-  Serial.begin(115200);
-  
-  // 1. Hardware initialisieren
-  pinMode(SET_PIN, OUTPUT);
-  digitalWrite(SET_PIN, HIGH); // PMS3003 aufwecken
-  Wire.begin(I2C_SDA, I2C_SCL);
-  PMS.begin(9600, SERIAL_8N1, PMS_RX, PMS_TX);
-  
-  if(!ccs.begin(0x5A)) Serial.println("CCS811 nicht gefunden!");
-  if(!bme.begin(0x76)) Serial.println("BME280 nicht gefunden!");
+// ==========================================
+// PMS3003 lesen
+// ==========================================
 
-  // 2. Aufwärmphase (Wichtig für CCS811 und PMS3003)
-  // Wir warten 2 Minuten, damit die Messplatte des CCS811 heiß wird
-  Serial.println("Sensoren wärmen 2 Minuten auf...");
-  unsigned long startWarmup = millis();
-  while(millis() - startWarmup < 120000) {
-    if(ccs.available()) ccs.readData(); // Dummy-Readings
-    delay(500);
+bool readPMS3003(int &pm1_0, int &pm2_5, int &pm10) {
+  pm1_0 = -1;
+  pm2_5 = -1;
+  pm10 = -1;
+
+  unsigned long start = millis();
+
+  while (millis() - start < 10000) {
+    if (!PMS.available()) {
+      delay(20);
+      continue;
+    }
+
+    if (PMS.read() != 0x42) continue;
+
+    unsigned long waitStart = millis();
+    while (PMS.available() < 3 && millis() - waitStart < 1000) {
+      delay(10);
+    }
+
+    if (PMS.available() < 3) continue;
+
+    if (PMS.read() != 0x4D) continue;
+
+    uint8_t lenHigh = PMS.read();
+    uint8_t lenLow  = PMS.read();
+
+    uint16_t frameLen = (lenHigh << 8) | lenLow;
+    uint16_t totalLen = frameLen + 4;
+
+    if (totalLen > 32 || totalLen < 24) {
+      Serial.print("PMS ungueltige Laenge: ");
+      Serial.println(frameLen);
+      continue;
+    }
+
+    uint8_t buf[32];
+    buf[0] = 0x42;
+    buf[1] = 0x4D;
+    buf[2] = lenHigh;
+    buf[3] = lenLow;
+
+    waitStart = millis();
+    while (PMS.available() < frameLen && millis() - waitStart < 1000) {
+      delay(10);
+    }
+
+    if (PMS.available() < frameLen) continue;
+
+    PMS.readBytes(&buf[4], frameLen);
+
+    uint16_t sum = 0;
+    for (int i = 0; i < totalLen - 2; i++) {
+      sum += buf[i];
+    }
+
+    uint16_t checksum = (buf[totalLen - 2] << 8) | buf[totalLen - 1];
+
+    if (sum != checksum) {
+      Serial.println("PMS Checksumme ungueltig.");
+      continue;
+    }
+
+    pm1_0 = (buf[4] << 8) | buf[5];
+    pm2_5 = (buf[6] << 8) | buf[7];
+    pm10  = (buf[8] << 8) | buf[9];
+
+    return true;
   }
 
-  // 3. Netzwerk starten
-  setup_wifi();
-  client.setServer(mqtt_server, mqtt_port);
-  client.setBufferSize(512);
-  if (!client.connected()) reconnect();
+  return false;
+}
+// ==========================================
+// CCS811 lesen
+// ==========================================
 
-  // 4. Daten auslesen
-  JsonDocument doc;
-  
-  // BME280
-  float temp = bme.readTemperature();
-  float hum = bme.readHumidity();
-  doc[ID_TEMP] = temp;
-  doc[ID_HUM] = hum;
-  doc[ID_PRESS] = bme.readPressure() / 100.0F;
+bool readCCS811(int &co2, int &tvoc, float hum, float temp) {
+  co2 = -1;
+  tvoc = -1;
 
-  // CCS811 mit BME-Daten füttern für bessere Genauigkeit
+  if (!ccsOK) return false;
+
   ccs.setEnvironmentalData(hum, temp);
-  if(ccs.available() && !ccs.readData()){
-    doc[ID_CO2] = ccs.geteCO2();
-  }
 
-  // PMS3003 Feinstaub
-  // Wir lesen den Puffer, bis wir aktuelle Daten haben
-  int pm1_0 = 0, pm2_5 = 0, pm10 = 0;
-  if (PMS.available() >= 24) {
-    uint8_t pmsBuffer[32];
-    PMS.readBytes(pmsBuffer, 32);
-    // Suche nach Start-Bytes 0x42 0x4D
-    for(int i=0; i<30; i++) {
-      if(pmsBuffer[i] == 0x42 && pmsBuffer[i+1] == 0x4D) {
-        pm1_0 = (pmsBuffer[i+10] << 8) | pmsBuffer[i+11];
-        pm2_5 = (pmsBuffer[i+12] << 8) | pmsBuffer[i+13];
-        pm10  = (pmsBuffer[i+14] << 8) | pmsBuffer[i+15];
-        break;
+  unsigned long start = millis();
+
+  while (millis() - start < 5000) {
+    if (ccs.available()) {
+      if (!ccs.readData()) {
+        co2 = ccs.geteCO2();
+        tvoc = ccs.getTVOC();
+        return true;
+      } else {
+        Serial.println("CCS811 Lesefehler.");
       }
     }
-    doc[ID_DUST10]  = pm10;   
-    doc[ID_DUST2_5] = pm2_5;
-    doc[ID_DUST1_0] = pm1_0;
+
+    delay(250);
   }
 
-  // 5. Senden
-  char buffer[512];
-  serializeJson(doc, buffer);
-  Serial.print("Sende Daten: ");
-  Serial.println(buffer);
+  return false;
+}
 
-  if (client.connected()) {
-    Serial.println(client.state());
-    if (client.publish(mqtt_topic, buffer, true)) {
-        Serial.println("MQTT Publish erfolgreich angestoßen.");
-    } else {
-        Serial.println("MQTT Publish fehlgeschlagen.");
-    }
+// ==========================================
+// Deep Sleep
+// ==========================================
 
-    // WICHTIG: Gib dem Netzwerk-Stack Zeit, die Daten wirklich zu senden
-    // Wir lassen die MQTT-Schleife 2 Sekunden laufen
-    unsigned long startMqttLoop = millis();
-    while (millis() - startMqttLoop < 2000) {
-        client.loop();
-        delay(10);
-    }
+void goToSleep() {
+  Serial.println("Gehe in Deep Sleep.");
 
-    client.disconnect(); // Verbindung sauber beenden
-  }
+  digitalWrite(SET_PIN, LOW);
+  WiFi.disconnect(true);
 
-  WiFi.disconnect(true); // WiFi explizit abschalten
-  delay(100); // Kurze Pause für die Hardware
+  delay(200);
 
-  
-  // 6. Ab in den Deep Sleep
-  Serial.println("Gute Nacht für 15 Minuten.");
-  digitalWrite(SET_PIN, LOW); // PMS3003 schlafen legen (spart Strom)
   esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
   esp_deep_sleep_start();
 }
 
+// ==========================================
+// Setup
+// ==========================================
+
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+
+  Serial.println();
+  Serial.println("SensorHub startet...");
+
+  pinMode(SET_PIN, OUTPUT);
+  digitalWrite(SET_PIN, HIGH);   // PMS3003 aufwecken
+
+  Wire.begin(I2C_SDA, I2C_SCL);
+  PMS.begin(9600, SERIAL_8N1, PMS_RX, PMS_TX);
+
+  ccsOK = ccs.begin(0x5A);
+  if (!ccsOK) {
+    Serial.println("CCS811 nicht gefunden!");
+  } else {
+    Serial.println("CCS811 gefunden.");
+  }
+
+  bmeOK = bme.begin(0x76);
+  if (!bmeOK) {
+    Serial.println("BME280 nicht gefunden!");
+  } else {
+    Serial.println("BME280 gefunden.");
+  }
+
+  Serial.println("Sensoren wärmen 2 Minuten auf...");
+
+  unsigned long startWarmup = millis();
+
+  while (millis() - startWarmup < 120000) {
+    if (ccsOK && ccs.available()) {
+      if (!ccs.readData()) {
+        Serial.print("Warmup eCO2: ");
+        Serial.println(ccs.geteCO2());
+      }
+    }
+
+    delay(1000);
+  }
+
+  StaticJsonDocument<512> doc;
+
+  // ==========================================
+  // BME280
+  // ==========================================
+
+  float temp = NAN;
+  float hum = NAN;
+  float press = NAN;
+
+  if (bmeOK) {
+    temp = bme.readTemperature();
+    hum = bme.readHumidity();
+    press = bme.readPressure() / 100.0F;
+
+    doc[ID_TEMP] = temp;
+    doc[ID_HUM] = hum;
+    doc[ID_PRESS] = press;
+
+    Serial.print("Temp: ");
+    Serial.println(temp);
+    Serial.print("Hum: ");
+    Serial.println(hum);
+    Serial.print("Press: ");
+    Serial.println(press);
+  }
+
+  // ==========================================
+  // CCS811
+  // ==========================================
+
+  int co2 = -1;
+  int tvoc = -1;
+
+  if (bmeOK && ccsOK && readCCS811(co2, tvoc, hum, temp)) {
+    doc[ID_CO2] = co2;
+
+    Serial.print("CO2: ");
+    Serial.println(co2);
+    Serial.print("TVOC: ");
+    Serial.println(tvoc);
+  } else {
+    Serial.println("Kein gültiger CCS811 Wert.");
+  }
+
+  // ==========================================
+  // PMS3003
+  // ==========================================
+  unsigned long start = millis();
+  while (millis() - start < 30000) {
+    int a,b,c;
+    readPMS3003(a,b,c);  // Werte ignorieren
+  }
+
+  int pm1_0 = -1;
+  int pm2_5 = -1;
+  int pm10 = -1;
+
+  if (readPMS3003(pm1_0, pm2_5, pm10)) {
+    doc[ID_DUST1_0] = pm1_0;
+    doc[ID_DUST2_5] = pm2_5;
+    doc[ID_DUST10] = pm10;
+
+    Serial.print("PM1.0: ");
+    Serial.println(pm1_0);
+    Serial.print("PM2.5: ");
+    Serial.println(pm2_5);
+    Serial.print("PM10: ");
+    Serial.println(pm10);
+  } else {
+    Serial.println("Kein gültiger PMS3003 Wert.");
+  }
+
+  // ==========================================
+  // MQTT senden
+  // ==========================================
+
+  char buffer[512];
+  serializeJson(doc, buffer);
+
+  Serial.print("JSON: ");
+  Serial.println(buffer);
+
+  bool wifiOK = setup_wifi();
+
+  if (wifiOK) {
+    client.setServer(mqtt_server, mqtt_port);
+    client.setBufferSize(512);
+
+    if (reconnect_mqtt()) {
+      bool ok = client.publish(mqtt_topic, buffer, true);
+
+      if (ok) {
+        Serial.println("MQTT Publish erfolgreich.");
+      } else {
+        Serial.println("MQTT Publish fehlgeschlagen.");
+      }
+
+      unsigned long startMqttLoop = millis();
+      while (millis() - startMqttLoop < 2000) {
+        client.loop();
+        delay(10);
+      }
+
+      client.disconnect();
+    }
+  }
+
+  goToSleep();
+}
+
 void loop() {
-  // Bleibt leer
 }
