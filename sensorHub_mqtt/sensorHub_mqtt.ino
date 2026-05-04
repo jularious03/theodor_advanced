@@ -9,18 +9,11 @@
 // ==========================================
 // INDIVIDUELLE EINSTELLUNGEN
 // ==========================================
-
 const char* ssid = "DEIN_WLAN";
 const char* password = "DEIN_PASSWORT";
 const char* station_name = "STATION_ORT_01";
 
 #define TIME_TO_SLEEP 900   // 900 Sekunden = 15 Minuten
-
-const char* mqtt_topic = "BEZIRK/ORT/STATION1/DATA";
-
-const char* mqtt_token = "FlespiToken b2gBQzaqtV13ELiBVGDfICUSX9khA9vZsffXbhtUeJIgggNc1geyOUUuJxXBb7co";
-const char* mqtt_server = "mqtt.flespi.io";
-const int mqtt_port = 1883;
 
 // OpenSenseMap Sensor-IDs
 const char* ID_TEMP    = "695a810d2432d1000720e77e";
@@ -31,6 +24,14 @@ const char* ID_DUST10  = "695a810d2432d1000720e782";
 const char* ID_DUST2_5 = "696b843dcbf9bc0007f509c6";
 const char* ID_DUST1_0 = "696b843dcbf9bc0007f509c8";
 
+const char* mqtt_topic = "BEZIRK/ORT/STATION1/DATA";
+
+// ==========================================
+// AB HIER BITTE NICHTS MEHR AENDERN
+// ==========================================
+const char* mqtt_token = "FlespiToken b2gBQzaqtV13ELiBVGDfICUSX9khA9vZsffXbhtUeJIgggNc1geyOUUuJxXBb7co";
+const char* mqtt_server = "mqtt.flespi.io";
+const int mqtt_port = 1883;
 // Pins
 #define I2C_SDA 21
 #define I2C_SCL 22
