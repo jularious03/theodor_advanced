@@ -11,8 +11,6 @@
 // ==========================================
 // INDIVIDUELLE EINSTELLUNGEN
 // ==========================================
-const char* station_name = "STATION_ORT_01";
-
 #define TIME_TO_SLEEP 900   // 900 Sekunden = 15 Minuten
 
 // OpenSenseMap Sensor-IDs
@@ -23,6 +21,9 @@ const char* ID_CO2     = "695a810d2432d1000720e781";
 const char* ID_DUST10  = "695a810d2432d1000720e782";
 const char* ID_DUST2_5 = "696b843dcbf9bc0007f509c6";
 const char* ID_DUST1_0 = "696b843dcbf9bc0007f509c8";
+
+// OpenSenseMap Box-Id
+const char* SenseBox_ID = "695a810d2432d1000720e77d";
 
 // ==========================================
 // AB HIER BITTE NICHTS MEHR AENDERN
@@ -218,7 +219,7 @@ void setup() {
   //   delay(1000);
   // }
 
-  StaticJsonDocument<512> doc;
+  JsonDocument doc;
 
   // ==========================================
   // BME280
@@ -298,29 +299,51 @@ void setup() {
   Serial.print("JSON: ");
   Serial.println(buffer);
 
-  Serial.println("Starte SD-Karten-Test...");
-
   sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
-
   if (!SD.begin(SD_CS, sdSPI)) {
     Serial.println("SD-Karte konnte nicht initialisiert werden!");
     return;
   }
-
   Serial.println("SD-Karte bereit.");
 
-  File file = SD.open("/testDaten.txt", FILE_APPEND);
+  File file = SD.open("/osem_ " + String(SenseBox_ID) + "_upload.csv", FILE_APPEND);
   if (!file) {
     Serial.println("Datei konnte nicht geöffnet werden!");
     return;
   }
 
-  file.println(buffer);
+  const char* timestamp = "2026-06-18T10:15:00Z"; // später von RTC holen
+
+  writeOsemLine(file, ID_TEMP, temp, timestamp);
+  writeOsemLine(file, ID_HUM, hum, timestamp);
+  writeOsemLine(file, ID_PRESS, press, timestamp);
+  writeOsemLineInt(file, ID_CO2, co2, timestamp);
+  writeOsemLineInt(file, ID_DUST1_0, pm1_0, timestamp);
+  writeOsemLineInt(file, ID_DUST2_5, pm2_5, timestamp);
+  writeOsemLineInt(file, ID_DUST10, pm10, timestamp);
+
   file.close();
-
-  Serial.println("Testdaten wurden geschrieben.");
-
   // goToSleep();
+}
+
+void writeOsemLine(File &file, const char* sensorId, float value, const char* timestamp) {
+  if (isnan(value)) return;
+
+  file.print(sensorId);
+  file.print(",");
+  file.print(value, 2);
+  file.print(",");
+  file.println(timestamp);
+}
+
+void writeOsemLineInt(File &file, const char* sensorId, int value, const char* timestamp) {
+  if (value < 0) return;
+
+  file.print(sensorId);
+  file.print(",");
+  file.print(value);
+  file.print(",");
+  file.println(timestamp);
 }
 
 void loop() {
