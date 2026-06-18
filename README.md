@@ -42,7 +42,16 @@ Der CSS811 muss beim Erstbetrieb 48 Stunden lang im Dauerbetrieb laufen, damit s
 | SCL    | GPIO22    | I2C SCL         | Datenleitung |
 | SDA    | GPIO21    | I2C SDA         | Datenleitung |
 
-![ESP Pinout](docs/ESP32-Pinout.png)
+| microSD SPI or SDIO | ESP32 Pin | Funktion        |
+| :------------------ | :-------- | :-------------- |
+| 3V                  | 3.3V      | Stromversorgung |
+| GND                 | GND       | Masse           |
+| CLK                 | GPIO14    | SPI SCK / Clock |
+| SO                  | GPIO12    | SPI MISO        |
+| SI                  | GPIO13    | SPI MOSI        |
+| CS                  | GPIO27    | Chip Select     |
+
+![ESP Pinout](docs/esp.jpg)
 
 Alle Masse Pins (GND) müssen miteinander verbunden sein!
 
@@ -72,4 +81,4 @@ Bevor der Code auf den ESP32 geladen wird, müssen folgende Variablen im Sketch 
 
 - **Keine Daten in der OSEM?** Prüfe im Seriellen Monitor, ob "Erfolgreich gesendet" erscheint. Wenn ja, kontrolliere, ob der Flespi-Token und das Topic in OSEM korrekt hinterlegt sind.
 - **Kompilierfehler?** Sicherstellen, dass alle Bibliotheken (insbes. Adafruit BusIO) aktuell sind.
-- **zu großer Payload?** Wenn die Daten zu groß sind und nicht verschickt werden können, dann setze die Buffersize größer (*client.setBufferSize(512);*)
+- **zu großer Payload?** Wenn die Daten zu groß sind und nicht verschickt werden können, dann setze die Buffersize größer (_client.setBufferSize(512);_)
