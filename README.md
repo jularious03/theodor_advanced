@@ -51,6 +51,15 @@ Der CSS811 muss beim Erstbetrieb 48 Stunden lang im Dauerbetrieb laufen, damit s
 | SI                  | GPIO13    | SPI MOSI        |
 | CS                  | GPIO27    | Chip Select     |
 
+| RTC (DS3231) | ESP32 Pin | Funktion        |
+| :----------- | :-------- | :-------------- |
+| VCC          | 3.3V      | Stromversorgung |
+| GND          | GND       | Masse           |
+| SCL          | GPIO22    | Datenleitung    |
+| SDA          | GPIO21    | Datenleitung    |
+
+<img src="docs/DS3231-RTC-Module-Pinout.png" width="300">
+
 ![ESP Pinout](docs/esp.jpg)
 
 Alle Masse Pins (GND) müssen miteinander verbunden sein!
@@ -60,10 +69,14 @@ Alle Masse Pins (GND) müssen miteinander verbunden sein!
 - PubSubClient.h
 - ArduinoJson.h
 - Wire.h
+- WiFi.h
 - HardwareSerial.h
 - Adafruit_CCS811.h
-- Adafruit BME280
+- Adafruit_BME280.h
 - Adafruit BusIO
+- RTClib.h
+- SPI.h
+- SD.h
 
 **Wichtiger Hinweis zur Installation:** Bei der Installation der Adafruit_CCS811 Bibliothek in der Arduino IDE muss zwingend auch die Adafruit BusIO Bibliothek installiert werden. Wähle bei der Abfrage am besten "Install all dependencies" aus.
 
@@ -71,11 +84,17 @@ Alle Masse Pins (GND) müssen miteinander verbunden sein!
 
 Bevor der Code auf den ESP32 geladen wird, müssen folgende Variablen im Sketch angepasst werden:
 
+### Über MQTT-Verbindung:
+
 1. **WLAN-Daten:** ssid und password deines lokalen Netzwerks.
 2. **Station-Name:** Vergib einen eindeutigen Namen für station_name (z.B. station_ort_01). Dieser Name muss einmalig sein!
 3. **Sensor-IDs:** Erstelle eine neue Station auf [openSenseMap.org](https://opensensemap.org/) und kopiere die IDs für Temperatur, Feinstaub etc. in die entsprechenden ID\_-Variablen im Code.
 4. **MQTT-Topic:** Achte darauf, dass im mqtt_topic keine Leerzeichen und Umlaute enthalten sind. Das Topic im Code muss exakt mit dem in der OpenSenseMap hinterlegten Topic übereinstimmen.
    Formuliere es am besten in diesem Format: "BEZIRK/ORT/STATION1/DATA" (z.B. "schaerding/zellPram/station1/data).
+
+### Datenspeicherung auf SD-Karte:
+
+**Zeitzone:** die RTC muss in der richtigen Zeitzone (UTC) laufen, sonst nimmt die OpenSenseMap die Daten nicht an. Wenn die RTC in der MEZ (Mittereuropäischer Normalzeit) läuft, dann uploade den Hilfs-Sketch und die RTC wird auf UTC umgestellt.
 
 ## Troubleshooting
 

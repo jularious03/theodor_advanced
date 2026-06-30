@@ -1,5 +1,3 @@
-#include <WiFi.h>
-#include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <Wire.h>
 #include <Adafruit_CCS811.h>
@@ -7,6 +5,7 @@
 #include <HardwareSerial.h>
 #include <SPI.h>
 #include <SD.h>
+#include <RTClib.h>
 
 // ==========================================
 // INDIVIDUELLE EINSTELLUNGEN
@@ -47,9 +46,11 @@ Adafruit_CCS811 ccs;
 Adafruit_BME280 bme;
 HardwareSerial PMS(2);
 SPIClass sdSPI(HSPI);
+RTC_DS3231 rtc;
 
 bool bmeOK = false;
 bool ccsOK = false;
+bool rtcOK = false;
 
 // ==========================================
 // PMS3003 lesen
@@ -158,6 +159,47 @@ bool readCCS811(int &co2, int &tvoc, float hum, float temp) {
   return false;
 }
 
+
+// ==========================================
+// RTC Zeitstempel
+// ==========================================
+
+void formatTimestamp(const DateTime &now, char *buffer, size_t bufferSize) {
+  if (buffer == nullptr || bufferSize == 0U) {
+    return;
+  }
+
+  const int written = snprintf(
+    buffer,
+    bufferSize,
+    "%04u-%02u-%02uT%02u:%02u:%02uZ",
+    static_cast<unsigned int>(now.year()),
+    static_cast<unsigned int>(now.month()),
+    static_cast<unsigned int>(now.day()),
+    static_cast<unsigned int>(now.hour()),
+    static_cast<unsigned int>(now.minute()),
+    static_cast<unsigned int>(now.second())
+  );
+
+  if (written < 0 || static_cast<size_t>(written) >= bufferSize) {
+    buffer[0] = '\0';
+  }
+}
+
+void getTimestamp(char *buffer, size_t bufferSize) {
+  if (buffer == nullptr || bufferSize == 0U) {
+    return;
+  }
+
+  if (!rtcOK) {
+    strncpy(buffer, "RTC_NOT_AVAILABLE", bufferSize);
+    buffer[bufferSize - 1U] = '\0';
+    return;
+  }
+
+  formatTimestamp(rtc.now(), buffer, bufferSize);
+}
+
 // ==========================================
 // Deep Sleep
 // ==========================================
@@ -190,6 +232,18 @@ void setup() {
   Wire.begin(I2C_SDA, I2C_SCL);
   PMS.begin(9600, SERIAL_8N1, PMS_RX, PMS_TX);
 
+  rtcOK = rtc.begin();
+  if (!rtcOK) {
+    Serial.println("DS3231 nicht gefunden! Zeitstempel wird als RTC_NOT_AVAILABLE gespeichert.");
+  } else {
+    Serial.println("DS3231 gefunden.");
+
+    if (rtc.lostPower()) {
+      Serial.println("RTC hat Strom verloren. Setze Zeit auf Kompilierzeit.");
+      rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    }
+  }
+
   ccsOK = ccs.begin(0x5A);
   if (!ccsOK) {
     Serial.println("CCS811 nicht gefunden!");
@@ -206,18 +260,18 @@ void setup() {
 
   Serial.println("Sensoren wärmen 2 Minuten auf...");
 
-  // unsigned long startWarmup = millis();
+  unsigned long startWarmup = millis();
 
-  // while (millis() - startWarmup < 120000) {
-  //   if (ccsOK && ccs.available()) {
-  //     if (!ccs.readData()) {
-  //       Serial.print("Warmup eCO2: ");
-  //       Serial.println(ccs.geteCO2());
-  //     }
-  //   }
+  while (millis() - startWarmup < 120000) {
+    if (ccsOK && ccs.available()) {
+      if (!ccs.readData()) {
+        Serial.print("Warmup eCO2: ");
+        Serial.println(ccs.geteCO2());
+      }
+    }
 
-  //   delay(1000);
-  // }
+    delay(1000);
+  }
 
   JsonDocument doc;
 
@@ -294,7 +348,7 @@ void setup() {
 
 
   char buffer[512];
-  serializeJson(doc, buffer);
+  serializeJson(doc, buffer, sizeof(buffer));
 
   Serial.print("JSON: ");
   Serial.println(buffer);
@@ -306,13 +360,18 @@ void setup() {
   }
   Serial.println("SD-Karte bereit.");
 
-  File file = SD.open("/osem_ " + String(SenseBox_ID) + "_upload.csv", FILE_APPEND);
+  const String logFileName = "/osem_" + String(SenseBox_ID) + "_upload.csv";
+  File file = SD.open(logFileName.c_str(), FILE_APPEND);
   if (!file) {
-    Serial.println("Datei konnte nicht geöffnet werden!");
+    Serial.println("Datei konnte nicht geoeffnet werden!");
     return;
   }
 
-  const char* timestamp = "2026-06-18T10:15:00Z"; // später von RTC holen
+  char timestamp[25];
+  getTimestamp(timestamp, sizeof(timestamp));
+
+  Serial.print("Zeitstempel: ");
+  Serial.println(timestamp);
 
   writeOsemLine(file, ID_TEMP, temp, timestamp);
   writeOsemLine(file, ID_HUM, hum, timestamp);
@@ -323,7 +382,7 @@ void setup() {
   writeOsemLineInt(file, ID_DUST10, pm10, timestamp);
 
   file.close();
-  // goToSleep();
+  goToSleep();
 }
 
 void writeOsemLine(File &file, const char* sensorId, float value, const char* timestamp) {

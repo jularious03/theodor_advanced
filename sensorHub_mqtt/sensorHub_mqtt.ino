@@ -13,14 +13,14 @@ const char* ssid = "DEIN_WLAN";
 const char* password = "DEIN_PASSWORT";
 const char* station_name = "STATION_ORT_01";
 
-#define TIME_TO_SLEEP 900   // 900 Sekunden = 15 Minuten
+#define TIME_TO_SLEEP 900  // 900 Sekunden = 15 Minuten
 
 // OpenSenseMap Sensor-IDs
-const char* ID_TEMP    = "695a810d2432d1000720e77e";
-const char* ID_HUM     = "695a810d2432d1000720e77f";
-const char* ID_PRESS   = "695a810d2432d1000720e780";
-const char* ID_CO2     = "695a810d2432d1000720e781";
-const char* ID_DUST10  = "695a810d2432d1000720e782";
+const char* ID_TEMP = "695a810d2432d1000720e77e";
+const char* ID_HUM = "695a810d2432d1000720e77f";
+const char* ID_PRESS = "695a810d2432d1000720e780";
+const char* ID_CO2 = "695a810d2432d1000720e781";
+const char* ID_DUST10 = "695a810d2432d1000720e782";
 const char* ID_DUST2_5 = "696b843dcbf9bc0007f509c6";
 const char* ID_DUST1_0 = "696b843dcbf9bc0007f509c8";
 
@@ -106,7 +106,7 @@ bool reconnect_mqtt() {
 // PMS3003 lesen
 // ==========================================
 
-bool readPMS3003(int &pm1_0, int &pm2_5, int &pm10) {
+bool readPMS3003(int& pm1_0, int& pm2_5, int& pm10) {
   pm1_0 = -1;
   pm2_5 = -1;
   pm10 = -1;
@@ -131,7 +131,7 @@ bool readPMS3003(int &pm1_0, int &pm2_5, int &pm10) {
     if (PMS.read() != 0x4D) continue;
 
     uint8_t lenHigh = PMS.read();
-    uint8_t lenLow  = PMS.read();
+    uint8_t lenLow = PMS.read();
 
     uint16_t frameLen = (lenHigh << 8) | lenLow;
     uint16_t totalLen = frameLen + 4;
@@ -171,7 +171,7 @@ bool readPMS3003(int &pm1_0, int &pm2_5, int &pm10) {
 
     pm1_0 = (buf[4] << 8) | buf[5];
     pm2_5 = (buf[6] << 8) | buf[7];
-    pm10  = (buf[8] << 8) | buf[9];
+    pm10 = (buf[8] << 8) | buf[9];
 
     return true;
   }
@@ -182,7 +182,7 @@ bool readPMS3003(int &pm1_0, int &pm2_5, int &pm10) {
 // CCS811 lesen
 // ==========================================
 
-bool readCCS811(int &co2, int &tvoc, float hum, float temp) {
+bool readCCS811(int& co2, int& tvoc, float hum, float temp) {
   co2 = -1;
   tvoc = -1;
 
@@ -237,7 +237,7 @@ void setup() {
   Serial.println("SensorHub startet...");
 
   pinMode(SET_PIN, OUTPUT);
-  digitalWrite(SET_PIN, HIGH);   // PMS3003 aufwecken
+  digitalWrite(SET_PIN, HIGH);  // PMS3003 aufwecken
 
   Wire.begin(I2C_SDA, I2C_SCL);
   PMS.begin(9600, SERIAL_8N1, PMS_RX, PMS_TX);
@@ -321,8 +321,8 @@ void setup() {
   // ==========================================
   unsigned long start = millis();
   while (millis() - start < 30000) {
-    int a,b,c;
-    readPMS3003(a,b,c);  // Werte ignorieren
+    int a, b, c;
+    readPMS3003(a, b, c);  // Werte ignorieren
   }
 
   int pm1_0 = -1;
